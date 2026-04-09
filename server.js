@@ -1,26 +1,9 @@
-const express    = require('express');
-const nodemailer = require('nodemailer');
-const cors       = require('cors');
+const express = require('express');
+const cors    = require('cors');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
-
-// ── CORS ──────────────────────────────────────────────────────
-// Allow requests from any origin (the HTML file can be opened locally
-// or hosted anywhere). Tighten this to your domain if you prefer.
 app.use(cors());
-
-// ── SMTP transporter ─────────────────────────────────────────
-// All config comes from environment variables — never hard-coded.
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST,
-  port:   parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true',   // true = port 465 (SSL), false = STARTTLS
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/', (_req, res) => {
@@ -29,32 +12,45 @@ app.get('/', (_req, res) => {
 
 // ── Send endpoint ─────────────────────────────────────────────
 // POST /send
-// Body: { to, toName, subject, html, fromName, fromEmail, replyTo? }
+// Body: { to, toName, subject, html, fromName }
 app.post('/send', async (req, res) => {
-  const { to, toName, subject, html, fromName, fromEmail, replyTo } = req.body;
+  const { to, toName, subject, html, fromName } = req.body;
 
-  // Basic validation
   if (!to || !subject || !html) {
     return res.status(400).json({ ok: false, error: 'Missing required fields: to, subject, html' });
   }
 
-  // The "from" address must match the authenticated SMTP user to avoid
-  // rejection. We use SMTP_USER as the actual sender, fromEmail is cosmetic.
-  const fromAddress = fromName
-    ? `"${fromName}" <${process.env.SMTP_USER}>`
-    : process.env.SMTP_USER;
+  const payload = {
+    sender: {
+      name:  fromName || process.env.BREVO_SENDER_NAME || 'CampaignOS',
+      email: process.env.BREVO_SENDER_EMAIL
+    },
+    to: [{ email: to, name: toName || to }],
+    subject,
+    htmlContent: html
+  };
 
   try {
-    await transporter.sendMail({
-      from:    fromAddress,
-      to:      toName ? `"${toName}" <${to}>` : to,
-      replyTo: replyTo || undefined,
-      subject,
-      html
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method:  'POST',
+      headers: {
+        'accept':       'application/json',
+        'content-type': 'application/json',
+        'api-key':      process.env.BREVO_API_KEY
+      },
+      body: JSON.stringify(payload)
     });
-    res.json({ ok: true });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[Brevo error]', data);
+      return res.status(500).json({ ok: false, error: data.message || 'Brevo API error' });
+    }
+
+    res.json({ ok: true, messageId: data.messageId });
   } catch (err) {
-    console.error('[SMTP error]', err.message);
+    console.error('[Send error]', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -62,6 +58,6 @@ app.post('/send', async (req, res) => {
 // ── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`CampaignOS SMTP proxy listening on port ${PORT}`);
-  console.log(`SMTP: ${process.env.SMTP_USER}@${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
+  console.log(`CampaignOS proxy listening on port ${PORT}`);
+  console.log(`Brevo sender: ${process.env.BREVO_SENDER_EMAIL}`);
 });

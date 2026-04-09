@@ -1,14 +1,13 @@
 {
   "name": "campaignos-smtp-proxy",
   "version": "1.0.0",
-  "description": "SMTP relay proxy for CampaignOS",
+  "description": "Email relay proxy for CampaignOS",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "nodemailer": "^6.9.13"
+    "express": "^4.18.2"
   }
 }
