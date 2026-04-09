@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: campaignos-smtp-proxy
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: SMTP_HOST
+        sync: false        # you fill this in the Render dashboard
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
